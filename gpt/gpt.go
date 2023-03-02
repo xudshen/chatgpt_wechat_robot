@@ -76,7 +76,7 @@ func Completions(msg string) (string, error, bool) {
 			time.Sleep(time.Duration(retry-1) * 100 * time.Millisecond)
 		}
 		if useImage {
-			gptResponseBody, resErr = httpRequestCompletionsOnImage(strings.ReplaceAll(msg, "画", ""), retry)
+			gptResponseBody, resErr = httpRequestCompletionsOnImage(strings.TrimPrefix(msg, "画"), retry)
 		} else {
 			gptResponseBody, resErr = httpRequestCompletions(msg, retry)
 		}
