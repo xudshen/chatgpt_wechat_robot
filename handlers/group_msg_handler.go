@@ -150,7 +150,7 @@ func (g *GroupMessageHandler) getRequestText() string {
 	}
 
 	var useImage bool
-	useImage = strings.HasPrefix(h.msg.Content, "画")
+	useImage = strings.HasPrefix(requestText, "画")
 	if useImage {
 		return strings.ReplaceAll(requestText, "画", "")
 	}

@@ -124,7 +124,7 @@ func (h *UserMessageHandler) getRequestText() string {
 	requestText = strings.Trim(h.msg.Content, "\n")
 
 	var useImage bool
-	useImage = strings.HasPrefix(h.msg.Content, "画")
+	useImage = strings.HasPrefix(requestText, "画")
 	if useImage {
 		return strings.ReplaceAll(requestText, "画", "")
 	}
