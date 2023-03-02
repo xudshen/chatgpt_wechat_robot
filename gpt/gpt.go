@@ -69,14 +69,14 @@ func Completions(msg string) (string, error, bool) {
 	var resErr error
 	//if msg start with "画"
 	var useImage bool
-	useImage = strings.HasPrefix(msg, "画") || strings.HasPrefix(msg, "draw") || strings.HasPrefix(msg, "Draw")
+	useImage = strings.HasPrefix(msg, "画")
 
 	for retry := 1; retry <= 3; retry++ {
 		if retry > 1 {
 			time.Sleep(time.Duration(retry-1) * 100 * time.Millisecond)
 		}
 		if useImage {
-			gptResponseBody, resErr = httpRequestCompletionsOnImage(msg, retry)
+			gptResponseBody, resErr = httpRequestCompletionsOnImage(strings.ReplaceAll(msg, "画", ""), retry)
 		} else {
 			gptResponseBody, resErr = httpRequestCompletions(msg, retry)
 		}

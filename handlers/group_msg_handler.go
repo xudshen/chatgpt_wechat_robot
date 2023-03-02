@@ -151,24 +151,22 @@ func (g *GroupMessageHandler) getRequestText() string {
 
 	var useImage bool
 	useImage = strings.HasPrefix(requestText, "画")
-	if useImage {
-		return strings.ReplaceAll(requestText, "画", "")
-	}
-
-	// 3.获取上下文拼接在一起,如果字符长度超出4000截取为4000(GPT按字符长度算),达芬奇3最大为4068,也许后续为了适应要动态进行判断
-	sessionText := g.service.GetUserSessionContext()
-	if sessionText != "" {
-		requestText = sessionText + "\n" + requestText
-	}
-	if len(requestText) >= 4000 {
-		requestText = requestText[:4000]
+	if !useImage {
+		// 3.获取上下文拼接在一起,如果字符长度超出4000截取为4000(GPT按字符长度算),达芬奇3最大为4068,也许后续为了适应要动态进行判断
+		sessionText := g.service.GetUserSessionContext()
+		if sessionText != "" {
+			requestText = sessionText + "\n" + requestText
+		}
+		if len(requestText) >= 4000 {
+			requestText = requestText[:4000]
+		}
 	}
 
 	// 4.检查用户发送文本是否包含结束标点符号
 	punctuation := ",.;!?，。！？、…"
 	runeRequestText := []rune(requestText)
 	lastChar := string(runeRequestText[len(runeRequestText)-1:])
-	if strings.Index(punctuation, lastChar) < 0 {
+	if !useImage && strings.Index(punctuation, lastChar) < 0 {
 		requestText = requestText + "？" // 判断最后字符是否加了标点,没有的话加上句号,避免openai自动补齐引起混乱
 	}
 
