@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/qingconglaixueit/wechatbot/config"
@@ -27,6 +28,11 @@ type ChatGPTResponseBody struct {
 		Param   interface{} `json:"param"`
 		Code    interface{} `json:"code"`
 	} `json:"error"`
+	Data []DataUrl `json:"data"`
+}
+
+type DataUrl struct {
+	Url string `json:"url"`
 }
 
 type ChoiceItem struct {
@@ -47,19 +53,33 @@ type ChatGPTRequestBody struct {
 	PresencePenalty  int     `json:"presence_penalty"`
 }
 
+type ChatGPTImageRequestBody struct {
+	Prompt string `json:"prompt"`
+	Number int    `json:"n"`
+	Size   string `json:"size,omitempty"`
+}
+
 // Completions gtp文本模型回复
-//curl https://api.openai.com/v1/completions
-//-H "Content-Type: application/json"
-//-H "Authorization: Bearer your chatGPT key"
-//-d '{"model": "text-davinci-003", "prompt": "give me good song", "temperature": 0, "max_tokens": 7}'
-func Completions(msg string) (string, error) {
+// curl https://api.openai.com/v1/completions
+// -H "Content-Type: application/json"
+// -H "Authorization: Bearer your chatGPT key"
+// -d '{"model": "text-davinci-003", "prompt": "give me good song", "temperature": 0, "max_tokens": 7}'
+func Completions(msg string) (string, error, bool) {
 	var gptResponseBody *ChatGPTResponseBody
 	var resErr error
+	//if msg start with "画"
+	var useImage bool
+	useImage = strings.HasPrefix(msg, "画") || strings.HasPrefix(msg, "draw") || strings.HasPrefix(msg, "Draw")
+
 	for retry := 1; retry <= 3; retry++ {
 		if retry > 1 {
 			time.Sleep(time.Duration(retry-1) * 100 * time.Millisecond)
 		}
-		gptResponseBody, resErr = httpRequestCompletions(msg, retry)
+		if useImage {
+			gptResponseBody, resErr = httpRequestCompletionsOnImage(msg, retry)
+		} else {
+			gptResponseBody, resErr = httpRequestCompletions(msg, retry)
+		}
 		if resErr != nil {
 			log.Printf("gpt request(%d) error: %v\n", retry, resErr)
 			continue
@@ -69,13 +89,18 @@ func Completions(msg string) (string, error) {
 		}
 	}
 	if resErr != nil {
-		return "", resErr
+		return "", resErr, useImage
 	}
 	var reply string
-	if gptResponseBody != nil && len(gptResponseBody.Choices) > 0 {
-		reply = gptResponseBody.Choices[0].Text
+	if gptResponseBody != nil {
+		if useImage && len(gptResponseBody.Data) > 0 {
+			reply = gptResponseBody.Data[0].Url
+		}
+		if !useImage && len(gptResponseBody.Choices) > 0 {
+			reply = gptResponseBody.Choices[0].Text
+		}
 	}
-	return reply, nil
+	return reply, nil, useImage
 }
 
 func httpRequestCompletions(msg string, runtimes int) (*ChatGPTResponseBody, error) {
@@ -101,6 +126,53 @@ func httpRequestCompletions(msg string, runtimes int) (*ChatGPTResponseBody, err
 	log.Printf("gpt request(%d) json: %s\n", runtimes, string(requestData))
 
 	req, err := http.NewRequest(http.MethodPost, "https://api.openai.com/v1/completions", bytes.NewBuffer(requestData))
+	if err != nil {
+		return nil, fmt.Errorf("http.NewRequest error: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.ApiKey)
+	client := &http.Client{Timeout: 15 * time.Second}
+	response, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("client.Do error: %v", err)
+	}
+	defer response.Body.Close()
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ioutil.ReadAll error: %v", err)
+	}
+
+	log.Printf("gpt response(%d) json: %s\n", runtimes, string(body))
+
+	gptResponseBody := &ChatGPTResponseBody{}
+	err = json.Unmarshal(body, gptResponseBody)
+	if err != nil {
+		return nil, fmt.Errorf("json.Marshal responseBody error: %v", err)
+	}
+	return gptResponseBody, nil
+}
+
+func httpRequestCompletionsOnImage(msg string, runtimes int) (*ChatGPTResponseBody, error) {
+	cfg := config.LoadConfig()
+	if cfg.ApiKey == "" {
+		return nil, errors.New("api key required")
+	}
+
+	requestBody := ChatGPTImageRequestBody{
+		Prompt: msg,
+		Number: 1,
+		Size:   "512x512",
+	}
+	requestData, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("json.Marshal requestBody error: %v", err)
+	}
+
+	log.Printf("gpt request(%d) json: %s\n", runtimes, string(requestData))
+
+	req, err := http.NewRequest(http.MethodPost, "https://api.openai.com/v1/images/generations", bytes.NewBuffer(requestData))
 	if err != nil {
 		return nil, fmt.Errorf("http.NewRequest error: %v", err)
 	}

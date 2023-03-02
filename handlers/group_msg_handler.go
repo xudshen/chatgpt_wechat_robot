@@ -92,8 +92,9 @@ func (g *GroupMessageHandler) ReplyText() error {
 		time.Unix(g.msg.CreateTime, 0).Format("2006/01/02 15:04:05"))
 
 	var (
-		err   error
-		reply string
+		err      error
+		reply    string
+		useImage bool
 	)
 
 	// 1.不是@的不处理
@@ -109,7 +110,7 @@ func (g *GroupMessageHandler) ReplyText() error {
 	}
 
 	// 3.请求GPT获取回复
-	reply, err = gpt.Completions(requestText)
+	reply, err, useImage = gpt.Completions(requestText)
 	if err != nil {
 		text := err.Error()
 		if strings.Contains(err.Error(), "context deadline exceeded") {
@@ -123,7 +124,9 @@ func (g *GroupMessageHandler) ReplyText() error {
 	}
 
 	// 4.设置上下文，并响应信息给用户
-	g.service.SetUserSessionContext(requestText, reply)
+	if !useImage {
+		g.service.SetUserSessionContext(requestText, reply)
+	}
 	_, err = g.msg.ReplyText(g.buildReplyText(reply))
 	if err != nil {
 		return fmt.Errorf("reply group error: %v ", err)
@@ -144,6 +147,12 @@ func (g *GroupMessageHandler) getRequestText() string {
 	requestText = strings.TrimSpace(strings.ReplaceAll(g.msg.Content, replaceText, ""))
 	if requestText == "" {
 		return ""
+	}
+
+	var useImage bool
+	useImage = strings.HasPrefix(h.msg.Content, "画")
+	if useImage {
+		return strings.ReplaceAll(requestText, "画", "")
 	}
 
 	// 3.获取上下文拼接在一起,如果字符长度超出4000截取为4000(GPT按字符长度算),达芬奇3最大为4068,也许后续为了适应要动态进行判断

@@ -79,8 +79,9 @@ func (h *UserMessageHandler) ReplyText() error {
 		time.Unix(h.msg.CreateTime, 0).Format("2006/01/02 15:04:05"))
 
 	var (
-		reply string
-		err   error
+		reply    string
+		err      error
+		useImage bool
 	)
 	// 1.获取上下文，如果字符串为空不处理
 	requestText := h.getRequestText()
@@ -90,7 +91,7 @@ func (h *UserMessageHandler) ReplyText() error {
 	}
 
 	// 2.向GPT发起请求，如果回复文本等于空,不回复
-	reply, err = gpt.Completions(h.getRequestText())
+	reply, err, useImage = gpt.Completions(h.getRequestText())
 	if err != nil {
 		text := err.Error()
 		if strings.Contains(err.Error(), "context deadline exceeded") {
@@ -104,7 +105,9 @@ func (h *UserMessageHandler) ReplyText() error {
 	}
 
 	// 2.设置上下文，回复用户
-	h.service.SetUserSessionContext(requestText, reply)
+	if !useImage {
+		h.service.SetUserSessionContext(requestText, reply)
+	}
 	_, err = h.msg.ReplyText(buildUserReply(reply))
 	if err != nil {
 		return fmt.Errorf("reply user error: %v ", err)
@@ -119,6 +122,12 @@ func (h *UserMessageHandler) getRequestText() string {
 	// 1.去除空格以及换行
 	requestText := strings.TrimSpace(h.msg.Content)
 	requestText = strings.Trim(h.msg.Content, "\n")
+
+	var useImage bool
+	useImage = strings.HasPrefix(h.msg.Content, "画")
+	if useImage {
+		return strings.ReplaceAll(requestText, "画", "")
+	}
 
 	// 2.获取上下文，拼接在一起，如果字符长度超出4000，截取为4000。（GPT按字符长度算），达芬奇3最大为4068，也许后续为了适应要动态进行判断。
 	sessionText := h.service.GetUserSessionContext()
